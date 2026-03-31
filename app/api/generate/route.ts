@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { getCanvaToken } from "@/lib/canva-auth";
 
 interface MedicoData {
   nome: string;
@@ -6,7 +7,6 @@ interface MedicoData {
   uf: string;
   especialidade: string;
   logoBase64?: string;
-  logoNome?: string;
 }
 
 interface GenerateRequest {
@@ -22,12 +22,10 @@ interface CanvaDesign {
 }
 
 async function uploadAsset(token: string, base64: string, nome: string): Promise<string | null> {
-  // Remove data URL prefix (e.g. "data:image/jpeg;base64,")
   const commaIdx = base64.indexOf(",");
   const base64Data = commaIdx >= 0 ? base64.slice(commaIdx + 1) : base64;
   const mimeMatch = base64.match(/^data:([^;]+);/);
   const mimeType = mimeMatch?.[1] ?? "image/jpeg";
-
   const buffer = Buffer.from(base64Data, "base64");
 
   const resp = await fetch("https://api.canva.com/rest/v1/assets", {
@@ -35,7 +33,9 @@ async function uploadAsset(token: string, base64: string, nome: string): Promise
     headers: {
       Authorization: `Bearer ${token}`,
       "Content-Type": mimeType,
-      "Asset-Upload-Metadata": JSON.stringify({ name_base64: Buffer.from(nome).toString("base64") }),
+      "Asset-Upload-Metadata": JSON.stringify({
+        name_base64: Buffer.from(nome).toString("base64"),
+      }),
     },
     body: buffer,
   });
@@ -45,21 +45,27 @@ async function uploadAsset(token: string, base64: string, nome: string): Promise
   return data.asset?.id ?? null;
 }
 
-async function duplicateDesign(token: string, templateId: string, nome: string): Promise<CanvaDesign | null> {
-  const resp = await fetch("https://api.canva.com/rest/v1/designs", {
+async function duplicateDesign(
+  token: string,
+  templateId: string,
+  titulo: string
+): Promise<CanvaDesign | null> {
+  // First try to create a copy of the design
+  const resp = await fetch(`https://api.canva.com/rest/v1/designs/${templateId}/copies`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${token}`,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({
-      design_type: { type: "preset", name: "InstagramPost" },
-      asset_id: templateId,
-      title: nome,
-    }),
+    body: JSON.stringify({ title: titulo }),
   });
 
-  if (!resp.ok) return null;
+  if (!resp.ok) {
+    const err = await resp.text();
+    console.error("Erro ao duplicar design:", err);
+    return null;
+  }
+
   const data = await resp.json() as { design?: CanvaDesign };
   return data.design ?? null;
 }
@@ -67,40 +73,29 @@ async function duplicateDesign(token: string, templateId: string, nome: string):
 export async function POST(request: Request) {
   const { medico, fotoBase64, templateId } = (await request.json()) as GenerateRequest;
 
-  const CANVA_TOKEN = process.env.CANVA_ACCESS_TOKEN;
-  if (!CANVA_TOKEN) {
-    return NextResponse.json(
-      { erro: "CANVA_ACCESS_TOKEN não configurado no servidor. Veja o arquivo .env.local." },
-      { status: 500 }
-    );
+  let token: string;
+  try {
+    token = await getCanvaToken();
+  } catch (e) {
+    return NextResponse.json({ erro: String(e) }, { status: 500 });
   }
 
-  // 1. Upload da foto do médico
+  // 1. Upload da foto do médico como asset
   let fotoAssetId: string | null = null;
   if (fotoBase64) {
-    fotoAssetId = await uploadAsset(CANVA_TOKEN, fotoBase64, `foto-${medico.nome}.jpg`);
+    fotoAssetId = await uploadAsset(token, fotoBase64, `foto-${medico.nome}.jpg`);
   }
 
-  // 2. Duplicar o template escolhido
-  const novoDesign = await duplicateDesign(
-    CANVA_TOKEN,
-    templateId,
-    `Arte — ${medico.nome} (${medico.especialidade})`
-  );
+  // 2. Duplicar o template selecionado
+  const titulo = `Arte — ${medico.nome} (${medico.especialidade})`;
+  const novoDesign = await duplicateDesign(token, templateId, titulo);
 
   if (!novoDesign) {
-    return NextResponse.json(
-      {
-        erro: "Não foi possível criar o design a partir do template. Verifique se o CANVA_ACCESS_TOKEN tem permissão de escrita.",
-        dica: "O template precisa estar no Canva da conta autenticada.",
-      },
-      { status: 500 }
-    );
+    return NextResponse.json({
+      erro: "Não foi possível duplicar o template. Verifique se o Client ID tem permissão de escrita no Canva.",
+    }, { status: 500 });
   }
 
-  // 3. Retornar links do design criado
-  // Nota: edição de elementos (troca de foto/texto) requer as IDs dos elementos do template,
-  // que variam por design. Por isso o usuário finaliza a edição diretamente no Canva.
   return NextResponse.json({
     editUrl: novoDesign.urls?.edit_url,
     viewUrl: novoDesign.urls?.view_url,

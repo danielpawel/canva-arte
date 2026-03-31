@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { getCanvaToken } from "@/lib/canva-auth";
 
 interface CanvaDesignItem {
   type: string;
@@ -14,19 +15,18 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const q = searchParams.get("q") ?? "";
 
-  const CANVA_TOKEN = process.env.CANVA_ACCESS_TOKEN;
-  if (!CANVA_TOKEN) {
-    return NextResponse.json({ error: "CANVA_ACCESS_TOKEN não configurado" }, { status: 500 });
+  let token: string;
+  try {
+    token = await getCanvaToken();
+  } catch (e) {
+    return NextResponse.json({ error: String(e) }, { status: 500 });
   }
 
   let url = "https://api.canva.com/rest/v1/designs?ownership=owned&item_types=design&limit=50";
   if (q) url += `&query=${encodeURIComponent(q)}`;
 
   const resp = await fetch(url, {
-    headers: {
-      Authorization: `Bearer ${CANVA_TOKEN}`,
-      "Content-Type": "application/json",
-    },
+    headers: { Authorization: `Bearer ${token}` },
   });
 
   if (!resp.ok) {
