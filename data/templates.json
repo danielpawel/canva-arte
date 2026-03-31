@@ -1,0 +1,34 @@
+[
+  {
+    "id": "DAHFdsv2vzw",
+    "nome": "Post Médico — Apresentação",
+    "tipo": "post",
+    "paginas": 2,
+    "thumbnail": "https://design.canva.ai/ua6wIeXNzEx-4_I",
+    "especialidades": []
+  },
+  {
+    "id": "DAGzV-fZOGE",
+    "nome": "Story Doutora Clássico",
+    "tipo": "story",
+    "paginas": 1,
+    "thumbnail": "https://design.canva.ai/ovpPnz9mD8Sa3uj",
+    "especialidades": ["Clínica Geral", "Ginecologia"]
+  },
+  {
+    "id": "DAG97qlFAtU",
+    "nome": "Pack Reels — Endocrinologia / Nutrição",
+    "tipo": "story",
+    "paginas": 112,
+    "thumbnail": "https://design.canva.ai/94Lw2RovsRcC8fe",
+    "especialidades": ["Endocrinologia", "Nutrição"]
+  },
+  {
+    "id": "DAG93RwYR60",
+    "nome": "Pack Reels — Vida e Saúde",
+    "tipo": "story",
+    "paginas": 113,
+    "thumbnail": "https://design.canva.ai/bboRxTyX1JyBKGw",
+    "especialidades": []
+  }
+]
